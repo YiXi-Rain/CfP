@@ -1,8 +1,4 @@
-# CfP 笔记
-echo "# CfP" >> README.md
-git init
-git add README.md
-git commit -m "first commit"
-git branch -M main
-git remote add origin https://github.com/YiXi-Rain/CfP.git
-git push -u origin main
+# CfP
+I'm not good at English.
+I just want to save my .py files online.
+Github这么多英文看不懂啊

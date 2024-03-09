@@ -221,22 +221,22 @@ class Quantity:
             return Quantity(self.__value * other, self.__str_dim(), self.sig())
 
     def __pow__(self, power, modulo=None):
-        if type(power) == int:
-            if power == 0:
-                return Quantity(1)
-            elif power > 0:
+        if power == 0:
+            return Quantity(1)
+        elif type(power) == int:
+            if power > 0:
                 return Quantity(self.__value ** power, self.__str_dim() * power, self.sig())
             else:
-                dim = []
-                for i in range(len(self.__dim)):
-                    dim.append(self.__dim[i].copy())
-                    if dim[i][1] % power == 0:
-                        dim[i][1] //= power
-                    else:
-                        raise Exception("！！不支持分数次幂单位！！")
-                return Quantity(self.__value ** power, str_dim(dim), self.sig())
+                return Quantity(self.__value ** power, change_sign(self.__str_dim()) * -power, self.sig())
         else:
-            raise Exception("！！不支持分数次幂单位！！")
+            dim = []
+            for i in range(len(self.__dim)):
+                dim.append(self.__dim[i].copy())
+                if (dim[i][1] * power) % 1 == 0:
+                    dim[i][1] = int(power * dim[i][1])
+                else:
+                    raise Exception("！！不支持分数次幂单位！！")
+            return Quantity(self.__value ** power, str_dim(dim), self.sig())
 
     def __truediv__(self, other):
         if type(other) == Quantity:

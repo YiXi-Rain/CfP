@@ -77,7 +77,10 @@ def str_unit(units_list: list):
     """
     unit_str = ""
     for i in units_list:
-        unit_str += "*" + i[0] + str(i[1])
+        if i[0]:
+            unit_str += "*" + i[0] + str(i[1])
+        else:
+            unit_str += str(i[1])
     return unit_str
 
 

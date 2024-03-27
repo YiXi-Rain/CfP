@@ -79,7 +79,7 @@ def str_unit(units_list: list):
     for i in units_list:
         if i[0]:
             unit_str += "*" + i[0] + str(i[1])
-        else:
+        else:  # 无单位时,只加入数字而不加入"*"
             unit_str += str(i[1])
     return unit_str
 
@@ -90,20 +90,19 @@ def unit_list_check(unit_list: list):
     :param unit_list: 列表形式的单位
     :return: 格式化后的list
     """
-    tem_list = []
-    for i in unit_list:
-        tem_list.append(i.copy())
     n = len(unit_list)
     i = 0
     while i < n:  # 消除power为0的单位
-        tem_list[i][1] = round(tem_list[i][1], 10)  # 消去python浮点预算的奇妙.9999999999,如果power是循环小数,留10位也能看出来
-        if tem_list[i][1] == 0:
-            del tem_list[i]
+        unit_list[i][1] = round(unit_list[i][1], 10)  # 消去python浮点预算的奇妙.9999999999,如果power是循环小数,留10位也能看出来
+        if unit_list[i][1] == 0:
+            del unit_list[i]
             n -= 1
         else:
+            if unit_list[i][1] % 1 == 0:
+                unit_list[i][1] = int(unit_list[i][1])
             i += 1
-    tem_list.sort(key=lambda x: x[0], reverse=False)  # 单位排序，统一输出格式
-    return tem_list
+    unit_list.sort(key=lambda x: x[0], reverse=False)  # 单位排序，统一输出格式
+    return unit_list
 
 
 def list_unit(unit_str: str, num: int or float = 1):
@@ -172,6 +171,7 @@ def clear_bracket(unit_str: str):
     :param unit_str: 字符串形式的单位
     :return: (str)格式化后的字符串形式的单位
     """
+    unit_str = unit_str.replace(" ", "")  # 去除所有空格
     unit_str = unit_str.replace("−", "-")  # 将cha(8722)转换为cha(45)
     unit_str = unit_str.replace("·", "*")  # 将cha(183)转换为cha(42)
     unit_str = unit_str.replace("**", "")  # 将乘方转换为空
@@ -183,7 +183,7 @@ def clear_bracket(unit_str: str):
 
 
 class Unit:
-    """Notice: Unit类实例加法就是乘法,减法就是除法"""
+    """处理字符串形式的单位,储存双层列表形式的单位。所有方法均不改变原来的值,且return均不为None"""
     def __init__(self, unit: str or list = "", simple: bool = False):
         """
         以列表(list)的形式储存单位,生成过程中一定调用unit_list_check完成了格式化
@@ -191,15 +191,15 @@ class Unit:
         :param simple: 是否开启简化生成模式
         """
         if simple:  # Notice: 因为list共享指针,所以使用simple模式时,输入的unit必须是临时的
-            self.list = unit
+            self.__list = unit
         else:
             if type(unit) is str:
-                self.list = list_unit(clear_bracket(unit))
+                self.__list = list_unit(clear_bracket(unit))
             else:
-                self.list = list_unit(str_unit(unit))
+                self.__list = list_unit(str_unit(unit))
 
     def __str__(self):
-        return str_unit(self.list)
+        return str_unit(self.__list)
 
     def __pos__(self):
         return self
@@ -210,43 +210,40 @@ class Unit:
             unit[i][1] *= -1
         return Unit(unit, True)
 
-    def __eq__(self, other):
+    def __eq__(self, other):  # 要想办法保证所有Unit的list都是格式化的,不然就有写format方法的必要(貌似已经保证了)
         if type(other) is Unit:
-            return self.list == other.list
-        elif (not other) and (not self.list):
+            return self.__list == other.__list
+        elif (not other) and (not self.__list):
             return True
         else:
             return False
 
     def __add__(self, other):
-        if type(other) is Unit:
-            unit = self.list_copy()
-            n = len(unit)
-            for j in range(len(other.list)):
-                i = 0
-                while i < n:
-                    if other.list[j][0] == unit[i][0]:  # 如果other的第j+1个单位在self中
-                        unit[i][1] += other.list[j][1]
-                        break
-                    i += 1
-                else:
-                    unit.append(other.list[j].copy())
-                    n += 1
-            return Unit(unit_list_check(unit), True)
+        if self == other:
+            return self
         else:
-            raise TypeError("!Unit类实例只能与Unit类实例相加!")
+            raise ValueError("!不同单位不能相加减!")
 
     def __sub__(self, other):
-        if type(other) is Unit:
-            return self + -other
-        else:
-            raise TypeError("!Unit类实例只能与Unit类实例相减!")
+        return self + other
 
     def __mul__(self, other):
         if type(other) is Unit:
-            return self + other
+            unit = self.list_copy()
+            n = len(unit)
+            for j in range(len(other.__list)):
+                i = 0
+                while i < n:
+                    if other.__list[j][0] == unit[i][0]:  # 如果other的第j+1个单位在self中
+                        unit[i][1] += other.__list[j][1]
+                        break
+                    i += 1
+                else:
+                    unit.append(other.__list[j].copy())
+                    n += 1
+            return Unit(unit_list_check(unit), True)
         else:
-            raise TypeError("!Unit类实例只能与Unit类实例相乘!")
+            raise TypeError("!Unit类实例只能与Unit类实例相乘除!")
 
     def __pow__(self, power, modulo=None):
         unit = self.list_copy()
@@ -255,13 +252,23 @@ class Unit:
         return Unit(unit_list_check(unit), True)
 
     def __truediv__(self, other):
-        if type(other) is Unit:
-            return self - other
-        else:
-            raise TypeError("!Unit类实例只能与Unit类实例相除!")
+        return self * -other
 
     def list_copy(self):
         tem_list = []
-        for i in self.list:
+        for i in self.__list:
             tem_list.append(i.copy())
         return tem_list
+
+    def str_unit(self):
+        """重写外部的str_unit方法,使Quantity调用Unit并print的结果更好看"""
+        unit_str = ""
+        for i in self.__list:
+            if i[1] == 1:
+                unit_str += "*" + i[0]
+            else:
+                unit_str += "*" + i[0] + str(i[1])
+        if unit_str:
+            return " " + unit_str[1:]
+        else:
+            return unit_str

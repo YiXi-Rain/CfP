@@ -7,7 +7,7 @@ Project: CfP--Calculation for Physics
 Feature: work with dimensions & scientific notation
 version: 1.0
 """
-NaturalUnit = False  # 是否启用自然单位制
+units_mode = 0  # 0为SI基本单位模式,1为自然单位制模式,2为原子物理模式(看other_base和other_dic的第二个元素)
 prefixes = {'Y': 1e24, 'Z': 1e21, 'E': 1e18, 'P': 1e15, 'T': 1e12, 'G': 1e9, 'M': 1e6, 'k': 1e3, 'h': 1e2, 'da': 1e1,
             'd': 1e-1, 'c': 1e-2, 'm': 1e-3, 'μ': 1e-6, 'n': 1e-9, 'p': 1e-12, 'f': 1e-15, 'a': 1e-18, 'z': 1e-21,
             'y': 1e-24}  # SI词头
@@ -20,25 +20,11 @@ standard_dic = {"c": (2.99792458e8, "m/s"), "me": (9.10938215e-31, "kg"), "mp": 
                 'T': (1, 'Wb/m2'), 'H': (1, 'Wb/A'), 'Wb': (1, 'V*s'), '°C': (1, 'K'), 'lx': (1, 'lm*m2'),
                 'lm': (1, 'cd*sr'), 'sr': (1, ''), 'Bq': (1, 's-1'), 'Gy': (1, 'J/kg'), 'Sv': (1, 'J/kg'),
                 'kat': (1, 'mol/s'), 'V': (1, 'W/A'), 'W': (1, 'J/s'), 'J': (1, 'N*m'), 'N': (1, 'kg*m/s2')}
-natural_base = ("h_", "c", "k", "MeV", "A", "mol", "cd")  # 自然单位制的基本单位
-natural_dic = {"K": (8.6173428e-11, "MeV/k"), "s": (1.51926758e21, "h_/MeV"), "m": (5.06773116e12, "c*h_/MeV"),
-               "kg": (5.609589118e29, "MeV/c2")}  # standard向natural转换的对应关系
-
-
-def str_unit(units_list: list):
-    """重写Unit中的str_unit方法,使print Quantity时结果更好看"""
-    unit_str = ""
-    for i in units_list:
-        if i[1] == 1:
-            unit_str += "*" + i[0]
-        elif i[1] % 1 == 0:
-            unit_str += "*" + i[0] + str(int(i[1]))
-        else:
-            unit_str += "*" + i[0] + str(i[1])
-    if unit_str:
-        return " " + unit_str[1:]
-    else:
-        return unit_str
+other_bases = (("h_", "c", "k", "MeV", "A", "mol", "cd"), ("fm", "MeV", "s", "K", "A", "mol", "cd"))  # 自然单位制的基本单位
+other_dicts = ({"K": (8.6173428e-11, "MeV"), "s": (1.51926758e21, "/MeV"), "m": (5.06773116e12, "/MeV"),
+                "kg": (5.609589118e29, "MeV")}, {"m": (1e15, "fm"), "kg": (6.241509647e-18, "MeV*s2/fm2")})
+# 自然单位制保留k h_ c {"K": (8.6173428e-11, "MeV/k"), "s": (1.51926758e21, "h_/MeV"),
+# "m": (5.06773116e12, "c*h_/MeV"), "kg": (5.609589118e29, "MeV/c2")}
 
 
 def trans_units(value, unit_list, base_units, dic):
@@ -56,7 +42,7 @@ def trans_units(value, unit_list, base_units, dic):
                 del unit_list[i]
             else:
                 i += 1
-        unit_list = (Unit(unit_list) + Unit(tem_units)).list_copy()
+        unit_list = (Unit(unit_list) * Unit(tem_units)).list_copy()
         for i in unit_list:
             if i[0] not in base_units:
                 break
@@ -66,7 +52,7 @@ def trans_units(value, unit_list, base_units, dic):
 
 
 class Quantity:
-    """物理量(标量)类, 单位采用m kg s A K mol cd"""
+    """物理量(标量)类, 单位默认采用SI基本单位m kg s A K mol cd。所有方法均不改变原来的值,且除show外return均不为None。"""
 
     def __init__(self, value, unit: str or Unit = "", sig=10, simple=False):
         """
@@ -91,13 +77,13 @@ class Quantity:
                             i[0] = i[0][len(j):]
                             break
             value, unit_list = trans_units(value, unit_list, standard_base, standard_dic)
-            if NaturalUnit:  # 自然单位制
-                value, unit_list = trans_units(value, unit_list, natural_base, natural_dic)
+            if units_mode:  # 其他单位制
+                value, unit_list = trans_units(value, unit_list, other_bases[units_mode-1], other_dicts[units_mode-1])
             self.sn = SN(value, sig)
             self.unit = Unit(unit_list, True)
 
     def __str__(self):
-        return str(self.sn) + str_unit(self.unit.list)
+        return str(self.sn) + self.unit.str_unit()
 
     def __pos__(self):
         return self
@@ -107,12 +93,14 @@ class Quantity:
 
     def __add__(self, other):
         if type(other) is Quantity:
-            if self.unit == other.unit:
-                return Quantity(self.sn + other.sn, self.unit, simple=True)
+            return Quantity(self.sn + other.sn, self.unit + other.unit, simple=True)
+        elif (type(other) is int) or (type(other) is float):
+            if self.unit == "":
+                return Quantity(self.sn + other, self.unit, simple=True)
             else:
-                raise TypeError("!单位不同的物理量不能相加减!")
+                raise ValueError("!单位不同的物理量不能相加!")
         else:
-            raise TypeError("!Quantity类实例只能与Quantity类实例相加减!")
+            raise TypeError("!Quantity类实例只能与Quantity/int/float类实例相加减!")
 
     def __sub__(self, other):
         return self + -other
@@ -143,20 +131,29 @@ class Quantity:
         return self.sn.sig
 
     def set_sig(self, sig):
-        self.sn.set_sig(sig)
+        sn = self.sn.set_sig(sig)
+        return Quantity(sn, self.unit, sig, True)
 
-    def set_unit(self, unit_str=None):
-        if unit_str == None:
-            return str(self)
-        else:
+    def set_unit(self, unit_str=None, power=None):
+        if unit_str is None:  # 没有规定单位
+            if power is None:  # 采用科学计数法
+                return self.sn.str_if_power() + self.unit.str_unit()
+            else:
+                return self.sn.str_if_power(power) + self.unit.str_unit()
+        else:  # 规定单位
             tem = self / Quantity(1, unit_str)
-            string = str_unit(tem.unit.list)
+            string = tem.unit.str_unit()
             if string:
-                string = "*" + str_unit(tem.unit.list)
-            return tem.sn.str() + " " + unit_str + string
+                string += "*" + unit_str
+            else:
+                string += " " + unit_str
+            if power is None:  # 采用默认输出,即-2~2量级不采用科学计数法,其他量级采用科学计数法
+                return str(tem.sn) + string
+            else:
+                return tem.sn.str_if_power(power) + string
 
-    def show(self, unit_str=None):
-        print(self.set_unit(unit_str))
+    def show(self, unit_str=None, power=None):
+        print(self.set_unit(unit_str, power))
 
 
 # 数学常数
@@ -172,7 +169,7 @@ h_ = h / 2 / pi
 epsilon0 = Quantity(1, "ε", 10)
 me = Quantity(1, "me", 9)
 mp = Quantity(1, "mp", 10)
-mn = Quantity(939.565346, "MeV/c/c", 9)
+mn = Quantity(1, "mn", 9)
 # 组合常数combined_constant简写cc
 cc_h = h_ * c  # ℏc
 cc_e = e * e / 4 / pi / epsilon0
@@ -180,10 +177,16 @@ alpha = cc_e / cc_h
 Ee = me * c * c
 Ep = mp * c * c
 
+RH = alpha ** 2 * 0.5 * me * c / h
 
-def bohr_v(z=1, n=1):
+
+def bohr_v(n=1, z=1):
     return alpha * z / n * c
 
 
-def bohr_r(z=1, n=1):
+def bohr_r(n=1, z=1):
     return h_ * n / me / bohr_v(z, n)
+
+
+def bohr_E(n=1, z=1):
+    return -(RH * h * c / n**2)
